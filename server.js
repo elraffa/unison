@@ -14,6 +14,9 @@ const app = express();
 // Define a port number
 const PORT = process.env.PORT || 3000;
 
+// require db module
+const client = require('./db');
+
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -32,6 +35,21 @@ const config = {
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 app.use(auth(config));
 
+// Connect to db
+async function run() {
+  try {
+    await client.connect();
+    const db = client.db('sample_restaurants');
+    const collection = db.collection('neighborhoods');
+    const documents = await collection.find().toArray();
+    console.log(documents);
+  } finally {
+    await client.close();
+  }
+}
+
+run().catch(console.dir);
+
 // Use profileRoutes for any request that starts with '/profiles'
 app.use('/profiles', profilesRoutes);
 
@@ -47,3 +65,4 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
