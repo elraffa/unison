@@ -1,9 +1,13 @@
 // Import express
 const express = require('express');
+const cors = require('cors');
+
 
 // Routes
 const profileRoutes = require('./routes/profileRoutes');
 const profilesRoutes = require('./routes/profilesRoutes');
+const userRoutes = require('./routes/userRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 // Dotenv
 require('dotenv').config();
@@ -17,11 +21,24 @@ const PORT = process.env.PORT || 3000;
 // require db module
 const client = require('./db');
 
-// Middleware to parse JSON bodies
+// Use cors middleware
+app.use(cors({ credentials: true, origin: process.env.CLIENT_ORIGIN }));
+
+// Use express.json middleware
 app.use(express.json());
+
+// User
+const User = require('./models/User');
 
 // Configure auth
 const { auth } = require('express-openid-connect');
+const session = require('express-session');
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: true,
+}));
 
 const config = {
   authRequired: process.env.AUTH_REQUIRED === 'true',
@@ -35,30 +52,33 @@ const config = {
 // auth router attaches /login, /logout, and /callback routes to the baseURL
 app.use(auth(config));
 
-// Connect to db
-async function run() {
-  try {
-    await client.connect();
-    const db = client.db('sample_restaurants');
-    const collection = db.collection('neighborhoods');
-    const documents = await collection.find().toArray();
-    console.log(documents);
-  } finally {
-    await client.close();
-  }
-}
-
-run().catch(console.dir);
-
 // Use profileRoutes for any request that starts with '/profiles'
 app.use('/profiles', profilesRoutes);
-
 app.use('/profile', profileRoutes);
+//app.use('/callback', authRoutes);
 
 // Define a route for the homepage
-app.get('/', (req, res) => {
-  const message = req.oidc.isAuthenticated() ? 'Logged in' : 'Logged out';
-  res.send(`Welcome to Unison! You are currently ${message}`);
+app.get('/', async (req, res) => {
+  if (req.oidc.isAuthenticated()) {
+    const user = req.oidc.user;
+
+    // Check if the user already exists in the database
+    let existingUser = await User.findOne({ auth0Id: user.sub });
+
+    if (!existingUser) {
+      // If the user doesn't exist, create a new user
+      const newUser = {
+        auth0Id: user.sub,
+        username: user.nickname || `user_${user.sub}`,
+      };
+
+      existingUser = await User.create(newUser);
+    }
+
+    res.json(existingUser);
+  } else {
+    res.json({ message: 'You are currently logged out' });
+  }
 });
 
 // Listen on the specified port

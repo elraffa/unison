@@ -1,13 +1,8 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
-
+const mongoose = require('mongoose');
 const uri = process.env.MONGO_DB_URI;
 
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
-});
+mongoose.connect(uri)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('Could not connect to MongoDB:', err));
 
-module.exports = client;
+module.exports = mongoose;
